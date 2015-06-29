@@ -34,15 +34,12 @@ namespace Ripple2Paket
             var nugets = findNugets(ripple).ToArray();
 
 
-            nugets.Each(x => Console.WriteLine(x));
+            var dependencies = readRippleDependencies(directory);
+
+            dependencies.Each(x => Console.WriteLine(x));
             Console.ReadLine();
 
             return 0;
-
-            var dependencies = readRippleDependencies(directory);
-
-            
-            
             
             removeRippleFiles(directory);
 
@@ -73,8 +70,21 @@ namespace Ripple2Paket
 
         private static IEnumerable<ProjectDependency> readRippleDependencies(string directory)
         {
-            throw new NotImplementedException();
+            var fileSystem = new FileSystem();
+            var projectFiles = fileSystem.FindFiles(directory, FileSet.Deep("ripple.dependencies.config"));
+            return projectFiles.SelectMany(file =>
+            {
+                var projectName = Path.GetFileNameWithoutExtension(file.ParentDirectory());
+                IList<string> names = null;
+
+                fileSystem.AlterFlatFile(file, list => names = list.Where(x => x.IsNotEmpty()).ToList());
+
+                return names.Select(x => new ProjectDependency {Nuget = x, Project = projectName});
+            });
         }
+
+
+
 
         private static void removeRippleFiles(string directory)
         {
@@ -125,5 +135,10 @@ namespace Ripple2Paket
     {
         public string Project;
         public string Nuget;
+
+        public override string ToString()
+        {
+            return string.Format("project: {0}, nuget: {1}", Project, Nuget);
+        }
     }
 }
