@@ -24,15 +24,20 @@ namespace Ripple2Paket
             }
             
             copyPaketExe(directory);
-            return 0;
+            
             var ripple = new XmlDocument();
             ripple.Load(directory.AppendPath("ripple.config"));
-
-            var feeds = findFeeds(ripple);
-            var nugets = findNugets(ripple);
-
-
             
+            var feeds = findFeeds(ripple).ToArray();
+
+ 
+            var nugets = findNugets(ripple).ToArray();
+
+
+            nugets.Each(x => Console.WriteLine(x));
+            Console.ReadLine();
+
+            return 0;
 
             var dependencies = readRippleDependencies(directory);
 
@@ -83,12 +88,23 @@ namespace Ripple2Paket
 
         private static IEnumerable<Nuget> findNugets(XmlDocument ripple)
         {
-            throw new NotImplementedException();
+            foreach (XmlElement element in ripple.DocumentElement.SelectNodes("//Dependency"))
+            {
+                yield return new Nuget
+                {
+                    Name = element.GetAttribute("Name"),
+                    Version = element.GetAttribute("Version"),
+                    Floated = element.GetAttribute("Mode") == "Float"
+                };
+            }
         }
 
         private static IEnumerable<string> findFeeds(XmlDocument ripple)
         {
-            throw new NotImplementedException();
+            foreach (XmlElement elem in ripple.DocumentElement.SelectNodes("//Feed"))
+            {
+                yield return elem.GetAttribute("Url");
+            }
         }
     }
 
@@ -97,6 +113,12 @@ namespace Ripple2Paket
         public string Name;
         public string Version;
         public bool Floated;
+
+
+        public override string ToString()
+        {
+            return string.Format("name: {0}, version: {1}, floated: {2}", Name, Version, Floated);
+        }
     }
 
     public class ProjectDependency
