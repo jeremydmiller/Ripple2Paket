@@ -37,13 +37,18 @@ namespace Ripple2Paket
             var dependencies = readRippleDependencies(directory);
 
             dependencies.Each(x => Console.WriteLine(x));
+
+            
+            removeRippleFiles(directory);
+
+
+            writePaketDependencies(directory, feeds, nugets);
+
+
             Console.ReadLine();
 
             return 0;
             
-            removeRippleFiles(directory);
-
-            writePaketDependencies(directory, feeds, nugets);
             var cmd = writeInstallationCmd(directory, dependencies);
 
             executeInstallation(cmd);
@@ -58,7 +63,42 @@ namespace Ripple2Paket
 
         private static string writeInstallationCmd(string directory, IEnumerable<ProjectDependency> dependencies)
         {
+            
+
             throw new NotImplementedException();
+        }
+
+
+        private static void removeRippleFiles(string directory)
+        {
+            var fileSystem = new FileSystem();
+            fileSystem.FindFiles(directory, FileSet.Deep("ripple.dependencies.config")).Each(x =>
+            {
+                Console.WriteLine("Deleting " + x.ToFullPath());
+                fileSystem.DeleteFile(x);
+            });
+
+            var rippleMain = directory.AppendPath("ripple.config");
+
+            Console.WriteLine("Deleting " + rippleMain.ToFullPath());
+            fileSystem.DeleteFile(rippleMain);
+        }
+
+        private static void writePaketDependencies(string directory, IEnumerable<string> feeds,
+            IEnumerable<Nuget> nugets)
+        {
+            var file = directory.AppendPath("paket.dependencies");
+            new FileSystem().WriteToFlatFile(file, writer =>
+            {
+                feeds.Each(feed => writer.WriteLine("source " + feed));
+
+                writer.WriteLine("");
+
+                nugets.Each(nuget =>
+                {
+                    writer.WriteLine(nuget.PaketLine());
+                });
+            });
         }
 
         private static void copyPaketExe(string directory)
@@ -85,16 +125,6 @@ namespace Ripple2Paket
 
 
 
-
-        private static void removeRippleFiles(string directory)
-        {
-            throw new NotImplementedException();
-        }
-
-        private static void writePaketDependencies(string directory, IEnumerable<string> feeds, IEnumerable<Nuget> nugets)
-        {
-            throw new NotImplementedException();
-        }
 
         private static IEnumerable<Nuget> findNugets(XmlDocument ripple)
         {
@@ -128,6 +158,13 @@ namespace Ripple2Paket
         public override string ToString()
         {
             return string.Format("name: {0}, version: {1}, floated: {2}", Name, Version, Floated);
+        }
+
+        public string PaketLine()
+        {
+            return Floated 
+                ? "nuget {0} ~> {1}".ToFormat(Name, Version) 
+                : "nuget {0} {1}".ToFormat(Name, Version);
         }
     }
 
