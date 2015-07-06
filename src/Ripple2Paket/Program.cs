@@ -1,16 +1,19 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.Remoting.Messaging;
 using System.Xml;
 using FubuCore;
+using FubuCore.CommandLine;
 
 namespace Ripple2Paket
 {
     internal class Program
     {
+        public const string RippleDependenciesConfig = "ripple.dependencies.config";
         private static bool success;
 
         public static int Main(string[] args)
@@ -22,6 +25,8 @@ namespace Ripple2Paket
             {
                 throw new Exception("The specified codebase directory {0} could not be found".ToFormat(directory));
             }
+
+            directory = directory.ToFullPath();
             
             copyPaketExe(directory);
             
@@ -39,49 +44,57 @@ namespace Ripple2Paket
             dependencies.Each(x => Console.WriteLine(x));
 
             
-            removeRippleFiles(directory);
-
+            var rippleFiles = findRippleFiles(directory);
 
             writePaketDependencies(directory, feeds, nugets);
 
 
-            Console.ReadLine();
 
-            return 0;
             
-            var cmd = writeInstallationCmd(directory, dependencies);
+            var cmd = writeInstallationCmd(directory, dependencies, rippleFiles);
 
-            executeInstallation(cmd);
+            ConsoleWriter.Write(ConsoleColor.Green, "Writing installation command file " + cmd);
 
-            return 0;
-        }
-
-        private static void executeInstallation(string cmd)
-        {
-            throw new NotImplementedException();
-        }
-
-        private static string writeInstallationCmd(string directory, IEnumerable<ProjectDependency> dependencies)
-        {
             
 
-            throw new NotImplementedException();
+            return 0;
         }
 
-
-        private static void removeRippleFiles(string directory)
+        private static string writeInstallationCmd(string directory, IEnumerable<ProjectDependency> dependencies, IEnumerable<string> rippleFiles)
         {
-            var fileSystem = new FileSystem();
-            fileSystem.FindFiles(directory, FileSet.Deep("ripple.dependencies.config")).Each(x =>
+            var file = directory.AppendPath("install-paket.cmd");
+
+            new FileSystem().WriteToFlatFile(file, writer =>
             {
-                Console.WriteLine("Deleting " + x.ToFullPath());
-                fileSystem.DeleteFile(x);
+                rippleFiles.Each(f =>
+                {
+                    writer.WriteLine("del " + f);
+                });
+
+                writer.WriteLine("");
+
+                writer.WriteLine("paket install");
+                writer.WriteLine("");
+
+                dependencies.Each(dep =>
+                {
+                    writer.WriteLine(dep.ToPaketAddCommand());
+                });
             });
 
-            var rippleMain = directory.AppendPath("ripple.config");
+            return file;
+        }
 
-            Console.WriteLine("Deleting " + rippleMain.ToFullPath());
-            fileSystem.DeleteFile(rippleMain);
+
+        private static IEnumerable<string> findRippleFiles(string directory)
+        {
+            var fileSystem = new FileSystem();
+            var list = fileSystem.FindFiles(directory, FileSet.Deep("ripple.dependencies.config")).ToList();
+
+            var rippleMain = directory.AppendPath("ripple.config");
+            list.Add(rippleMain);
+
+            return list;
         }
 
         private static void writePaketDependencies(string directory, IEnumerable<string> feeds,
@@ -111,13 +124,13 @@ namespace Ripple2Paket
         private static IEnumerable<ProjectDependency> readRippleDependencies(string directory)
         {
             var fileSystem = new FileSystem();
-            var projectFiles = fileSystem.FindFiles(directory, FileSet.Deep("ripple.dependencies.config"));
+            var projectFiles = fileSystem.FindFiles(directory, FileSet.Deep("*.csproj"));
             return projectFiles.SelectMany(file =>
             {
-                var projectName = Path.GetFileNameWithoutExtension(file.ParentDirectory());
+                var projectName = Path.GetFileNameWithoutExtension(file);
                 IList<string> names = null;
 
-                fileSystem.AlterFlatFile(file, list => names = list.Where(x => x.IsNotEmpty()).ToList());
+                fileSystem.AlterFlatFile(file.ParentDirectory().AppendPath(RippleDependenciesConfig), list => names = list.Where(x => x.IsNotEmpty()).ToList());
 
                 return names.Select(x => new ProjectDependency {Nuget = x, Project = projectName});
             });
@@ -176,6 +189,12 @@ namespace Ripple2Paket
         public override string ToString()
         {
             return string.Format("project: {0}, nuget: {1}", Project, Nuget);
+        }
+
+
+        public string ToPaketAddCommand()
+        {
+            return "paket add nuget {0} project {1} --hard".ToFormat(Nuget, Project);
         }
     }
 }
